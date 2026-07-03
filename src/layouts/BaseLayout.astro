@@ -1,0 +1,52 @@
+---
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description } = Astro.props;
+const year = new Date().getFullYear();
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" href="/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+    {description && <meta name="description" content={description} />}
+    <title>{title} — Agent Playground</title>
+  </head>
+  <body class="min-h-screen bg-white text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100">
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+
+    <header class="border-b border-slate-200 dark:border-slate-800">
+      <div class="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-4 px-4 py-4">
+        <a href="/" class="flex items-center gap-2 text-lg font-semibold">
+          <img src="/logo.png" alt="" width="32" height="32" class="h-8 w-8" />
+          Agent Playground
+        </a>
+        <nav aria-label="Primary">
+          <ul class="flex gap-4">
+            <li><a href="/" class="underline-offset-4 hover:underline">Home</a></li>
+            <li><a href="/admin" class="underline-offset-4 hover:underline">Admin</a></li>
+          </ul>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main-content" class="mx-auto max-w-4xl px-4 py-8">
+      <slot />
+    </main>
+
+    <footer class="mt-12 border-t border-slate-200 dark:border-slate-800">
+      <div class="mx-auto max-w-4xl px-4 py-6 text-sm text-slate-600 dark:text-slate-400">
+        <p>Agent Playground · {year} · Accessible testing pages for AI agents.</p>
+      </div>
+    </footer>
+  </body>
+</html>

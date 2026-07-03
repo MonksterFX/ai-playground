@@ -1,0 +1,28 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout
+  title="Disabled State Test"
+  description="A page used to demonstrate disabled-page behavior."
+>
+  <h1 class="text-2xl font-bold">Disabled State Test</h1>
+  <p class="mt-4 max-w-2xl text-slate-700 dark:text-slate-300">
+    This page exists to demonstrate disabled-page behavior. While enabled, it renders
+    normally. Disable it from the admin <a href="/admin/pages" class="underline underline-offset-4">Pages</a>
+    view, and this route will return an HTTP <code>410 Gone</code> response with an
+    accessible message. The access attempt is logged as an event.
+  </p>
+
+  <section
+    aria-labelledby="how-heading"
+    class="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900"
+  >
+    <h2 id="how-heading" class="text-lg font-semibold">How to test</h2>
+    <ol class="mt-2 list-decimal space-y-1 pl-6">
+      <li>Open the admin Pages view and disable &ldquo;Disabled State Test&rdquo;.</li>
+      <li>Reload this page to see the disabled response.</li>
+      <li>Re-enable the page from the admin area to restore it.</li>
+    </ol>
+  </section>
+</BaseLayout>

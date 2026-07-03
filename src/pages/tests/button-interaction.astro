@@ -1,0 +1,103 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout
+  title="Button Interaction Test"
+  description="Click buttons and observe accessible state changes."
+>
+  <h1 class="text-2xl font-bold">Button Interaction Test</h1>
+  <p class="mt-4 max-w-2xl text-slate-700 dark:text-slate-300">
+    This page tests whether an agent can click buttons and understand the resulting
+    state changes. Updates are announced through an ARIA live region.
+  </p>
+
+  <section aria-labelledby="counter-heading" class="mt-8">
+    <h2 id="counter-heading" class="text-lg font-semibold">Counter</h2>
+    <p class="mt-2">
+      Current value:
+      <output id="counter-value" class="font-mono text-lg font-semibold">0</output>
+    </p>
+    <div class="mt-3 flex flex-wrap gap-3">
+      <button
+        id="increment"
+        type="button"
+        class="rounded bg-blue-700 px-4 py-2 font-medium text-white hover:bg-blue-800"
+      >
+        Increase count
+      </button>
+      <button
+        id="decrement"
+        type="button"
+        class="rounded bg-slate-700 px-4 py-2 font-medium text-white hover:bg-slate-800"
+      >
+        Decrease count
+      </button>
+      <button
+        id="reset"
+        type="button"
+        class="rounded border border-slate-400 px-4 py-2 font-medium hover:bg-slate-100 dark:hover:bg-slate-800"
+      >
+        Reset count
+      </button>
+    </div>
+  </section>
+
+  <section aria-labelledby="toggle-heading" class="mt-10">
+    <h2 id="toggle-heading" class="text-lg font-semibold">Toggle</h2>
+    <p class="mt-2">Use the button to switch the feature on or off.</p>
+    <button
+      id="toggle"
+      type="button"
+      aria-pressed="false"
+      class="mt-3 rounded border border-slate-400 px-4 py-2 font-medium hover:bg-slate-100 dark:hover:bg-slate-800"
+    >
+      Feature is off
+    </button>
+  </section>
+
+  <p id="live-status" class="sr-only" role="status" aria-live="polite"></p>
+</BaseLayout>
+
+<script is:inline>
+  (() => {
+    const counterValue = document.getElementById('counter-value');
+    const live = document.getElementById('live-status');
+    let count = 0;
+
+    const announce = (message) => {
+      if (live) live.textContent = message;
+    };
+
+    const render = () => {
+      if (counterValue) counterValue.textContent = String(count);
+    };
+
+    document.getElementById('increment')?.addEventListener('click', () => {
+      count += 1;
+      render();
+      announce(`Count increased to ${count}.`);
+    });
+
+    document.getElementById('decrement')?.addEventListener('click', () => {
+      count -= 1;
+      render();
+      announce(`Count decreased to ${count}.`);
+    });
+
+    document.getElementById('reset')?.addEventListener('click', () => {
+      count = 0;
+      render();
+      announce('Count reset to 0.');
+    });
+
+    const toggle = document.getElementById('toggle');
+    toggle?.addEventListener('click', () => {
+      const pressed = toggle.getAttribute('aria-pressed') === 'true';
+      const next = !pressed;
+      toggle.setAttribute('aria-pressed', String(next));
+      toggle.textContent = next ? 'Feature is on' : 'Feature is off';
+      announce(next ? 'Feature turned on.' : 'Feature turned off.');
+    });
+  })();
+</script>

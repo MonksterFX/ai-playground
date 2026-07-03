@@ -1,0 +1,18 @@
+{
+  "defaults": {
+    "standard": "WCAG2AA",
+    "timeout": 30000,
+    "wait": 500,
+    "chromeLaunchConfig": {
+      "args": ["--no-sandbox"]
+    }
+  },
+  "urls": [
+    "http://localhost:4321/",
+    "http://localhost:4321/tests/basic-navigation",
+    "http://localhost:4321/tests/simple-form",
+    "http://localhost:4321/tests/button-interaction",
+    "http://localhost:4321/tests/content-extraction",
+    "http://localhost:4321/tests/disabled-state"
+  ]
+}

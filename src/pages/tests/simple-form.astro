@@ -1,0 +1,186 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { recordEvent } from '../../lib/db/repo';
+
+const roles = ['Researcher', 'Developer', 'QA Tester', 'Product Manager'];
+
+interface FormState {
+  name: string;
+  email: string;
+  role: string;
+  subscribe: boolean;
+}
+
+const errors: Partial<Record<keyof FormState, string>> = {};
+let submitted = false;
+let values: FormState = { name: '', email: '', role: '', subscribe: false };
+
+if (Astro.request.method === 'POST') {
+  const data = await Astro.request.formData();
+  values = {
+    name: (data.get('name') ?? '').toString().trim(),
+    email: (data.get('email') ?? '').toString().trim(),
+    role: (data.get('role') ?? '').toString(),
+    subscribe: data.get('subscribe') === 'on',
+  };
+
+  if (!values.name) errors.name = 'Enter your name.';
+  if (!values.email) {
+    errors.email = 'Enter your email address.';
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) {
+    errors.email = 'Enter a valid email address, for example name@example.com.';
+  }
+  if (!values.role) errors.role = 'Select a role.';
+
+  submitted = Object.keys(errors).length === 0;
+
+  // Log the submission attempt. Never store raw personal values — only which
+  // fields were provided, the (non-PII) selected role, and validity.
+  recordEvent({
+    eventType: 'form_submit',
+    pageId: 'simple-form',
+    path: Astro.url.pathname,
+    url: Astro.url.href,
+    method: 'POST',
+    statusCode: 200,
+    requestId: Astro.locals.requestId,
+    metadata: {
+      valid: submitted,
+      selectedRole: values.role || null,
+      subscribe: values.subscribe,
+      fieldsProvided: {
+        name: values.name.length > 0,
+        email: values.email.length > 0,
+        role: values.role.length > 0,
+      },
+    },
+  });
+}
+
+const errorEntries = Object.entries(errors) as [keyof FormState, string][];
+---
+
+<BaseLayout
+  title="Simple Form Test"
+  description="Fill in and submit a simple accessible form."
+>
+  <h1 class="text-2xl font-bold">Simple Form Test</h1>
+  <p class="mt-4 max-w-2xl text-slate-700 dark:text-slate-300">
+    This page tests whether an agent can complete and submit a simple form. All fields
+    are labeled and validation errors are announced.
+  </p>
+
+  {
+    submitted && (
+      <div
+        role="status"
+        class="mt-6 rounded-lg border border-green-600 bg-green-50 p-4 text-green-900 dark:bg-green-950 dark:text-green-100"
+      >
+        <p class="font-semibold">Form submitted successfully.</p>
+        <p class="mt-1">Thank you, {values.name}. Your response was recorded.</p>
+      </div>
+    )
+  }
+
+  {
+    errorEntries.length > 0 && (
+      <div
+        role="alert"
+        tabindex="-1"
+        id="error-summary"
+        class="mt-6 rounded-lg border border-red-600 bg-red-50 p-4 text-red-900 dark:bg-red-950 dark:text-red-100"
+      >
+        <h2 class="font-semibold">There is a problem</h2>
+        <ul class="mt-2 list-disc pl-6">
+          {errorEntries.map(([field, message]) => (
+            <li>
+              <a href={`#${field}`} class="underline underline-offset-4">
+                {message}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+    )
+  }
+
+  <form method="POST" novalidate class="mt-8 max-w-md space-y-6">
+    <div>
+      <label for="name" class="block font-medium">Full name</label>
+      <input
+        id="name"
+        name="name"
+        type="text"
+        autocomplete="name"
+        required
+        value={values.name}
+        aria-invalid={errors.name ? 'true' : undefined}
+        aria-describedby={errors.name ? 'name-error' : undefined}
+        class="mt-1 w-full rounded border border-slate-400 px-3 py-2 dark:bg-slate-900"
+      />
+      {errors.name && <p id="name-error" class="mt-1 text-sm text-red-700 dark:text-red-300">{errors.name}</p>}
+    </div>
+
+    <div>
+      <label for="email" class="block font-medium">Email address</label>
+      <input
+        id="email"
+        name="email"
+        type="email"
+        autocomplete="email"
+        required
+        value={values.email}
+        aria-invalid={errors.email ? 'true' : undefined}
+        aria-describedby={errors.email ? 'email-error' : undefined}
+        class="mt-1 w-full rounded border border-slate-400 px-3 py-2 dark:bg-slate-900"
+      />
+      {errors.email && <p id="email-error" class="mt-1 text-sm text-red-700 dark:text-red-300">{errors.email}</p>}
+    </div>
+
+    <div>
+      <label for="role" class="block font-medium">Role</label>
+      <select
+        id="role"
+        name="role"
+        required
+        aria-invalid={errors.role ? 'true' : undefined}
+        aria-describedby={errors.role ? 'role-error' : undefined}
+        class="mt-1 w-full rounded border border-slate-400 px-3 py-2 dark:bg-slate-900"
+      >
+        <option value="">Please choose a role</option>
+        {roles.map((role) => (
+          <option value={role} selected={values.role === role}>
+            {role}
+          </option>
+        ))}
+      </select>
+      {errors.role && <p id="role-error" class="mt-1 text-sm text-red-700 dark:text-red-300">{errors.role}</p>}
+    </div>
+
+    <div class="flex items-center gap-2">
+      <input
+        id="subscribe"
+        name="subscribe"
+        type="checkbox"
+        checked={values.subscribe}
+        class="h-4 w-4"
+      />
+      <label for="subscribe">Subscribe to occasional updates</label>
+    </div>
+
+    <button
+      type="submit"
+      class="rounded bg-blue-700 px-4 py-2 font-medium text-white hover:bg-blue-800"
+    >
+      Submit form
+    </button>
+  </form>
+</BaseLayout>
+
+{
+  errorEntries.length > 0 && (
+    <script is:inline>
+      document.getElementById('error-summary')?.focus();
+    </script>
+  )
+}

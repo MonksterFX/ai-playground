@@ -1,0 +1,125 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import {
+  getPageById,
+  listPages,
+  recordAdminAction,
+  recordEvent,
+  setPageEnabled,
+} from '../../lib/db/repo';
+
+let notice: { type: 'success' | 'error'; message: string } | null = null;
+
+if (Astro.request.method === 'POST') {
+  const data = await Astro.request.formData();
+  const pageId = (data.get('pageId') ?? '').toString();
+  const action = (data.get('action') ?? '').toString();
+
+  const page = getPageById(pageId);
+  if (!page || (action !== 'enable' && action !== 'disable')) {
+    notice = { type: 'error', message: 'Invalid request. No changes were made.' };
+  } else {
+    const enabled = action === 'enable';
+    setPageEnabled(pageId, enabled);
+    recordAdminAction({
+      actionType: enabled ? 'page_enabled' : 'page_disabled',
+      targetPageId: pageId,
+      metadata: { path: page.path },
+    });
+    recordEvent({
+      eventType: enabled ? 'page_enabled' : 'page_disabled',
+      pageId,
+      path: page.path,
+      method: 'POST',
+      statusCode: 200,
+      requestId: Astro.locals.requestId,
+    });
+    return Astro.redirect('/admin/pages', 303);
+  }
+}
+
+const pages = listPages();
+---
+
+<AdminLayout title="Pages">
+  {
+    notice && (
+      <div
+        role="alert"
+        class:list={[
+          'mb-6 rounded-lg border p-4',
+          notice.type === 'success'
+            ? 'border-green-600 bg-green-50 text-green-900 dark:bg-green-950 dark:text-green-100'
+            : 'border-red-600 bg-red-50 text-red-900 dark:bg-red-950 dark:text-red-100',
+        ]}
+      >
+        {notice.message}
+      </div>
+    )
+  }
+
+  <p class="mb-4 text-slate-700 dark:text-slate-300">
+    Enable or disable individual public test pages. Disabled pages return an HTTP 410
+    response and log the access attempt.
+  </p>
+
+  <div class="overflow-x-auto">
+    <table class="w-full border-collapse text-left">
+      <caption class="sr-only">Registered test pages and their status.</caption>
+      <thead>
+        <tr class="border-b border-slate-300 dark:border-slate-700">
+          <th scope="col" class="py-2 pr-4">Title</th>
+          <th scope="col" class="py-2 pr-4">Path</th>
+          <th scope="col" class="py-2 pr-4">Status</th>
+          <th scope="col" class="py-2 pr-4">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {
+          pages.map((page) => (
+            <tr class="border-b border-slate-200 align-top dark:border-slate-800">
+              <th scope="row" class="py-3 pr-4 font-medium">
+                {page.title}
+                <span class="block text-sm font-normal text-slate-600 dark:text-slate-400">
+                  {page.description}
+                </span>
+              </th>
+              <td class="py-3 pr-4">
+                <a href={page.path} class="underline underline-offset-4">
+                  {page.path}
+                </a>
+              </td>
+              <td class="py-3 pr-4">
+                <span
+                  class:list={[
+                    'inline-block rounded px-2 py-1 text-sm font-medium',
+                    page.enabled
+                      ? 'bg-green-100 text-green-900 dark:bg-green-900 dark:text-green-100'
+                      : 'bg-red-100 text-red-900 dark:bg-red-900 dark:text-red-100',
+                  ]}
+                >
+                  {page.enabled ? 'Enabled' : 'Disabled'}
+                </span>
+              </td>
+              <td class="py-3 pr-4">
+                <form method="POST">
+                  <input type="hidden" name="pageId" value={page.id} />
+                  <input type="hidden" name="action" value={page.enabled ? 'disable' : 'enable'} />
+                  <button
+                    type="submit"
+                    class:list={[
+                      'rounded px-3 py-1.5 font-medium text-white',
+                      page.enabled ? 'bg-red-700 hover:bg-red-800' : 'bg-green-700 hover:bg-green-800',
+                    ]}
+                  >
+                    {page.enabled ? `Disable ${page.title}` : `Enable ${page.title}`}
+                  </button>
+                </form>
+              </td>
+            </tr>
+          ))
+        }
+      </tbody>
+    </table>
+  </div>
+</AdminLayout>

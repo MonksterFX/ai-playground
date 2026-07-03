@@ -1,0 +1,43 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout
+  title="Basic Navigation Test"
+  description="Follow the navigation links to reach the target page."
+>
+  <h1 class="text-2xl font-bold">Basic Navigation Test</h1>
+  <p class="mt-4 max-w-2xl text-slate-700 dark:text-slate-300">
+    This page tests whether an agent can follow clear navigation links to reach a
+    specific target.
+  </p>
+
+  <section
+    aria-labelledby="task-heading"
+    class="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900"
+  >
+    <h2 id="task-heading" class="text-lg font-semibold">Your task</h2>
+    <p class="mt-2">
+      Navigate to the <strong>Content Extraction Test</strong> page using the links below,
+      then find the total listed in its summary table.
+    </p>
+  </section>
+
+  <nav aria-label="Test pages" class="mt-8">
+    <h2 class="text-lg font-semibold">Available destinations</h2>
+    <ul class="mt-3 list-disc space-y-2 pl-6">
+      <li><a href="/tests/simple-form" class="underline underline-offset-4">Simple Form Test</a></li>
+      <li>
+        <a href="/tests/button-interaction" class="underline underline-offset-4">
+          Button Interaction Test
+        </a>
+      </li>
+      <li>
+        <a href="/tests/content-extraction" class="underline underline-offset-4">
+          Content Extraction Test (target)
+        </a>
+      </li>
+      <li><a href="/" class="underline underline-offset-4">Back to home</a></li>
+    </ul>
+  </nav>
+</BaseLayout>

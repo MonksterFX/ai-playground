@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+/*
+ * Accessibility baseline styles.
+ * These apply site-wide on top of Tailwind and are intentionally framework-agnostic
+ * so pages remain accessible even without utility classes.
+ */
+
+:root {
+  color-scheme: light dark;
+}
+
+/* Visible focus indicator for keyboard users. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 3px solid #1d4ed8;
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Skip-to-content link: hidden until focused. */
+.skip-link {
+  position: absolute;
+  left: 0.5rem;
+  top: -3rem;
+  z-index: 1000;
+  padding: 0.5rem 0.75rem;
+  background: #1d4ed8;
+  color: #ffffff;
+  border-radius: 0 0 0.375rem 0.375rem;
+  text-decoration: none;
+  transition: top 0.15s ease-in-out;
+}
+
+.skip-link:focus {
+  top: 0;
+}
+
+/* Respect users who prefer reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
