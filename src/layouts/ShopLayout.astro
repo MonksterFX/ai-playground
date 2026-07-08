@@ -34,7 +34,7 @@ const cartCount = cart.itemCount;
   <body class="min-h-screen bg-white text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100">
     <a class="skip-link" href="#main-content">Skip to main content</a>
 
-    <header class="border-b border-slate-200 dark:border-slate-800">
+    <header class="border-b border-slate-200 dark:border-slate-800" style="background-color: aquamarine;">
       <div class="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-4 px-4 py-4">
         <a href="/shop" class="flex items-center gap-2 text-lg font-semibold">
           <span aria-hidden="true">🛍️</span>
@@ -52,11 +52,16 @@ const cartCount = cart.itemCount;
                 <span class="sr-only">{cartCount === 1 ? 'item' : 'items'} in cart</span>
               </a>
             </li>
-            <li><a href="/" class="underline-offset-4 hover:underline">Playground</a></li>
           </ul>
         </nav>
       </div>
     </header>
+
+    <div class="mx-auto max-w-4xl px-4 pt-2">
+      <a href="/" class="text-sm text-slate-600 underline-offset-4 hover:underline dark:text-slate-400">
+        &larr; Switch to Playground
+      </a>
+    </div>
 
     {
       breadcrumbs.length > 0 && (
