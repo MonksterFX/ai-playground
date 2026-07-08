@@ -6,5 +6,7 @@ declare namespace App {
     requestId: string;
     /** Whether the request passed admin Basic Auth. */
     isAdmin: boolean;
+    /** Demo-shop cart id (from the `cart_id` cookie); set on `/shop*` routes. */
+    cartId: string | null;
   }
 }

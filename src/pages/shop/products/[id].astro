@@ -1,0 +1,66 @@
+---
+import ShopLayout from '../../../layouts/ShopLayout.astro';
+import { getProductById, formatPrice } from '../../../lib/webshop/catalog';
+
+const { id } = Astro.params;
+const product = id ? getProductById(id) : undefined;
+
+if (!product) {
+  return new Response(null, {
+    status: 404,
+    headers: { Location: '/shop' },
+  });
+}
+---
+
+<ShopLayout
+  title={product.name}
+  description={product.shortDescription}
+  breadcrumbs={[
+    { label: 'Shop', href: '/shop' },
+    { label: product.name },
+  ]}
+>
+  <article class="grid gap-8 sm:grid-cols-2">
+    <div
+      class="flex items-center justify-center rounded-lg border border-slate-200 bg-slate-50 p-12 dark:border-slate-800 dark:bg-slate-900"
+    >
+      <span class="text-8xl" aria-hidden="true">{product.emoji}</span>
+    </div>
+
+    <div>
+      <h1 class="text-3xl font-bold">{product.name}</h1>
+      <p class="mt-2 text-2xl font-bold">{formatPrice(product.priceInCents)}</p>
+      <p class="mt-4 text-slate-700 dark:text-slate-300">{product.longDescription}</p>
+
+      <form method="POST" action="/shop/cart/add" class="mt-8 space-y-4">
+        <input type="hidden" name="productId" value={product.id} />
+        <input type="hidden" name="redirectTo" value="/shop/cart" />
+        <div>
+          <label for="qty" class="block font-medium">Quantity</label>
+          <input
+            id="qty"
+            name="qty"
+            type="number"
+            inputmode="numeric"
+            min="1"
+            max="99"
+            step="1"
+            value="1"
+            class="mt-1 w-24 rounded border border-slate-400 px-3 py-2 dark:bg-slate-900"
+          />
+        </div>
+        <button
+          type="submit"
+          class="rounded bg-slate-900 px-6 py-3 font-semibold text-white hover:bg-slate-700 focus-visible:outline-2 focus-visible:outline-offset-2 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-300"
+        >
+          Add to cart
+        </button>
+      </form>
+
+      <p class="mt-6">
+        <a href="/shop" class="underline underline-offset-4">← Back to all products</a>
+      </p>
+    </div>
+  </article>
+</ShopLayout>

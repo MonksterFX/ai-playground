@@ -1,0 +1,171 @@
+---
+import ShopLayout from '../../layouts/ShopLayout.astro';
+import { getCartView, formatPrice } from '../../lib/webshop/cart-server';
+import { removeCartItem, setCartItemQty, recordEvent } from '../../lib/db/repo';
+
+const cartId = Astro.locals.cartId;
+
+// --- Handle mutations (Post/Redirect/Get) ---
+if (Astro.request.method === 'POST' && cartId) {
+  const data = await Astro.request.formData();
+  const intent = (data.get('intent') ?? '').toString();
+  const productId = (data.get('productId') ?? '').toString();
+
+  if (productId) {
+    if (intent === 'remove') {
+      removeCartItem(cartId, productId);
+      recordEvent({
+        eventType: 'cart_update',
+        pageId: 'shop-cart',
+        path: Astro.url.pathname,
+        url: Astro.url.href,
+        method: 'POST',
+        statusCode: 303,
+        requestId: Astro.locals.requestId,
+        metadata: { action: 'remove', productId },
+      });
+    } else if (intent === 'update') {
+      const qtyRaw = Number.parseInt((data.get('qty') ?? '1').toString(), 10);
+      const qty = Number.isFinite(qtyRaw) ? Math.min(Math.max(qtyRaw, 0), 99) : 1;
+      setCartItemQty(cartId, productId, qty);
+      recordEvent({
+        eventType: 'cart_update',
+        pageId: 'shop-cart',
+        path: Astro.url.pathname,
+        url: Astro.url.href,
+        method: 'POST',
+        statusCode: 303,
+        requestId: Astro.locals.requestId,
+        metadata: { action: 'update', productId, qty },
+      });
+    }
+  }
+
+  return Astro.redirect('/shop/cart', 303);
+}
+
+const cart = getCartView(cartId);
+---
+
+<ShopLayout
+  title="Your cart"
+  description="Review the items in your shopping cart."
+  breadcrumbs={[{ label: 'Shop', href: '/shop' }, { label: 'Cart' }]}
+>
+  <h1 class="text-3xl font-bold">Your cart</h1>
+
+  {
+    cart.isEmpty ? (
+      <div class="mt-8">
+        <p class="text-slate-700 dark:text-slate-300">Your cart is empty.</p>
+        <p class="mt-4">
+          <a href="/shop" class="underline underline-offset-4">
+            Browse products
+          </a>
+        </p>
+      </div>
+    ) : (
+      <div class="mt-8 space-y-8">
+        <table class="w-full border-collapse text-left">
+          <caption class="sr-only">Items in your shopping cart</caption>
+          <thead>
+            <tr class="border-b border-slate-300 dark:border-slate-700">
+              <th scope="col" class="py-2 pr-4">Product</th>
+              <th scope="col" class="py-2 pr-4">Price</th>
+              <th scope="col" class="py-2 pr-4">Quantity</th>
+              <th scope="col" class="py-2 pr-4">Line total</th>
+              <th scope="col" class="py-2">
+                <span class="sr-only">Actions</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {cart.lines.map((line) => (
+              <tr class="border-b border-slate-200 dark:border-slate-800">
+                <th scope="row" class="py-4 pr-4 font-medium">
+                  <span class="mr-2 text-2xl" aria-hidden="true">
+                    {line.product.emoji}
+                  </span>
+                  <a
+                    href={`/shop/products/${line.product.id}`}
+                    class="underline-offset-4 hover:underline"
+                  >
+                    {line.product.name}
+                  </a>
+                </th>
+                <td class="py-4 pr-4">{formatPrice(line.product.priceInCents)}</td>
+                <td class="py-4 pr-4">
+                  <form method="POST" class="flex items-center gap-2">
+                    <input type="hidden" name="intent" value="update" />
+                    <input type="hidden" name="productId" value={line.product.id} />
+                    <label for={`qty-${line.product.id}`} class="sr-only">
+                      Quantity for {line.product.name}
+                    </label>
+                    <input
+                      id={`qty-${line.product.id}`}
+                      name="qty"
+                      type="number"
+                      inputmode="numeric"
+                      min="0"
+                      max="99"
+                      step="1"
+                      value={line.qty}
+                      class="w-20 rounded border border-slate-400 px-2 py-1 dark:bg-slate-900"
+                    />
+                    <button
+                      type="submit"
+                      class="rounded border border-slate-400 px-3 py-1 text-sm font-medium hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 dark:hover:bg-slate-800"
+                    >
+                      Update<span class="sr-only"> quantity for {line.product.name}</span>
+                    </button>
+                  </form>
+                </td>
+                <td class="py-4 pr-4 font-semibold">{formatPrice(line.lineTotalInCents)}</td>
+                <td class="py-4">
+                  <form method="POST">
+                    <input type="hidden" name="intent" value="remove" />
+                    <input type="hidden" name="productId" value={line.product.id} />
+                    <button
+                      type="submit"
+                      class="rounded px-3 py-1 text-sm font-medium text-red-700 underline underline-offset-4 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 dark:text-red-300 dark:hover:bg-red-950"
+                    >
+                      Remove<span class="sr-only"> {line.product.name}</span>
+                    </button>
+                  </form>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <div class="ml-auto max-w-sm rounded-lg border border-slate-200 p-5 dark:border-slate-800">
+          <h2 class="text-lg font-semibold">Order summary</h2>
+          <dl class="mt-4 space-y-2">
+            <div class="flex justify-between">
+              <dt>Subtotal</dt>
+              <dd>{formatPrice(cart.subtotalInCents)}</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt>Shipping</dt>
+              <dd>{formatPrice(cart.shippingInCents)}</dd>
+            </div>
+            <div class="flex justify-between border-t border-slate-200 pt-2 text-lg font-bold dark:border-slate-800">
+              <dt>Total</dt>
+              <dd>{formatPrice(cart.totalInCents)}</dd>
+            </div>
+          </dl>
+          <a
+            href="/shop/checkout"
+            class="mt-6 block rounded bg-slate-900 px-4 py-3 text-center font-semibold text-white hover:bg-slate-700 focus-visible:outline-2 focus-visible:outline-offset-2 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-300"
+          >
+            Proceed to checkout
+          </a>
+        </div>
+
+        <p>
+          <a href="/shop" class="underline underline-offset-4">← Continue shopping</a>
+        </p>
+      </div>
+    )
+  }
+</ShopLayout>

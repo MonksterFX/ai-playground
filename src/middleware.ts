@@ -5,12 +5,13 @@ import { defineMiddleware } from 'astro:middleware';
 import { unauthorizedResponse, verifyAdminAuth } from './lib/auth';
 import { getPageByPath, recordEvent } from './lib/db/repo';
 import { ensurePagesSeeded } from './lib/db/seed';
-import { findTestPageByPath } from './lib/pages/registry';
+import { resolveTrackedPage } from './lib/pages/registry';
 import { detectAgentHint } from './lib/tracking/agent';
 import { filterHeaders } from './lib/tracking/headers';
 
 const TRACK_IP = (process.env.TRACK_IP ?? 'true').toLowerCase() !== 'false';
 const DISABLED_STATUS = process.env.DISABLED_STATUS === '404' ? 404 : 410;
+const CART_COOKIE = 'cart_id';
 
 /** Tracking must never break a request. */
 function safeTrack(fn: () => void): void {
@@ -64,6 +65,22 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   context.locals.requestId = requestId;
   context.locals.isAdmin = false;
+  context.locals.cartId = null;
+
+  // --- Demo-shop cart cookie provisioning ---
+  if (url.pathname === '/shop' || url.pathname.startsWith('/shop/')) {
+    let cartId = context.cookies.get(CART_COOKIE)?.value ?? null;
+    if (!cartId) {
+      cartId = randomUUID();
+      context.cookies.set(CART_COOKIE, cartId, {
+        path: '/',
+        httpOnly: true,
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 30,
+      });
+    }
+    context.locals.cartId = cartId;
+  }
 
   // --- Admin Basic Auth gate ---
   if (url.pathname === '/admin' || url.pathname.startsWith('/admin/')) {
@@ -101,9 +118,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
   }
 
   // --- Disabled test page gate ---
-  const testPage = findTestPageByPath(url.pathname);
+  const testPage = resolveTrackedPage(url.pathname);
   if (testPage) {
-    const pageRow = getPageByPath(url.pathname);
+    const pageRow = getPageByPath(testPage.path);
     if (pageRow && !pageRow.enabled) {
       safeTrack(() =>
         recordEvent({

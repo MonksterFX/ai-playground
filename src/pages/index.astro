@@ -1,6 +1,8 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { testPages } from '../lib/pages/registry';
+
+const nonShopPages = testPages.filter((page) => !page.id.startsWith('shop-'));
 ---
 
 <BaseLayout
@@ -25,7 +27,7 @@ import { testPages } from '../lib/pages/registry';
     <h2 id="tests-heading" class="text-xl font-semibold">Test pages</h2>
     <ul class="mt-4 grid gap-4 sm:grid-cols-2">
       {
-        testPages.map((page) => (
+        nonShopPages.map((page) => (
           <li class="rounded-lg border border-slate-200 p-4 dark:border-slate-800">
             <h3 class="text-lg font-medium">
               <a href={page.path} class="underline-offset-4 hover:underline">
@@ -37,5 +39,21 @@ import { testPages } from '../lib/pages/registry';
         ))
       }
     </ul>
+  </section>
+
+  <section aria-labelledby="shop-heading" class="mt-12">
+    <h2 id="shop-heading" class="text-xl font-semibold">Demo shop</h2>
+    <p class="mt-2 max-w-2xl text-slate-700 dark:text-slate-300">
+      A fake, accessible multi-page shop with product listing, product detail, cart, and checkout
+      flows for testing how agents shop and complete purchases.
+    </p>
+    <p class="mt-4">
+      <a
+        href="/shop"
+        class="inline-block rounded bg-slate-900 px-5 py-2.5 font-semibold text-white hover:bg-slate-700 focus-visible:outline-2 focus-visible:outline-offset-2 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-300"
+      >
+        Open the demo shop
+      </a>
+    </p>
   </section>
 </BaseLayout>

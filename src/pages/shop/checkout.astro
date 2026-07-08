@@ -1,0 +1,397 @@
+---
+import ShopLayout from '../../layouts/ShopLayout.astro';
+import { getCartView, formatPrice } from '../../lib/webshop/cart-server';
+import { clearCart, createOrder, recordEvent } from '../../lib/db/repo';
+
+const cartId = Astro.locals.cartId;
+const cart = getCartView(cartId);
+
+interface CheckoutValues {
+  name: string;
+  email: string;
+  address: string;
+  city: string;
+  postalCode: string;
+  country: string;
+  cardName: string;
+  cardNumber: string;
+  cardExpiry: string;
+  cardCvc: string;
+}
+
+const errors: Partial<Record<keyof CheckoutValues, string>> = {};
+let values: CheckoutValues = {
+  name: '',
+  email: '',
+  address: '',
+  city: '',
+  postalCode: '',
+  country: '',
+  cardName: '',
+  cardNumber: '',
+  cardExpiry: '',
+  cardCvc: '',
+};
+
+if (Astro.request.method === 'POST' && cartId) {
+  // Never proceed to checkout with an empty cart.
+  if (cart.isEmpty) {
+    return Astro.redirect('/shop/cart', 303);
+  }
+
+  const data = await Astro.request.formData();
+  const get = (key: keyof CheckoutValues) => (data.get(key) ?? '').toString().trim();
+  values = {
+    name: get('name'),
+    email: get('email'),
+    address: get('address'),
+    city: get('city'),
+    postalCode: get('postalCode'),
+    country: get('country'),
+    cardName: get('cardName'),
+    cardNumber: get('cardNumber'),
+    cardExpiry: get('cardExpiry'),
+    cardCvc: get('cardCvc'),
+  };
+
+  if (!values.name) errors.name = 'Enter your full name.';
+  if (!values.email) {
+    errors.email = 'Enter your email address.';
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) {
+    errors.email = 'Enter a valid email address, for example name@example.com.';
+  }
+  if (!values.address) errors.address = 'Enter your street address.';
+  if (!values.city) errors.city = 'Enter your city.';
+  if (!values.postalCode) errors.postalCode = 'Enter your postal code.';
+  if (!values.country) errors.country = 'Select a country.';
+  if (!values.cardName) errors.cardName = 'Enter the name on the card.';
+  if (!/^\d{12,19}$/.test(values.cardNumber.replace(/\s+/g, ''))) {
+    errors.cardNumber = 'Enter a card number with 12 to 19 digits.';
+  }
+  if (!/^(0[1-9]|1[0-2])\s*\/\s*\d{2}$/.test(values.cardExpiry)) {
+    errors.cardExpiry = 'Enter the expiry date as MM/YY.';
+  }
+  if (!/^\d{3,4}$/.test(values.cardCvc)) {
+    errors.cardCvc = 'Enter the 3 or 4 digit security code.';
+  }
+
+  const valid = Object.keys(errors).length === 0;
+
+  // Never store raw payment data — only which fields validated and the total.
+  recordEvent({
+    eventType: 'checkout_submit',
+    pageId: 'shop-checkout',
+    path: Astro.url.pathname,
+    url: Astro.url.href,
+    method: 'POST',
+    statusCode: valid ? 303 : 200,
+    requestId: Astro.locals.requestId,
+    metadata: {
+      valid,
+      itemCount: cart.itemCount,
+      totalInCents: cart.totalInCents,
+      country: values.country || null,
+    },
+  });
+
+  if (valid) {
+    const order = createOrder({
+      cartId,
+      itemsJson: JSON.stringify(
+        cart.lines.map((line) => ({
+          productId: line.product.id,
+          name: line.product.name,
+          qty: line.qty,
+          priceInCents: line.product.priceInCents,
+          lineTotalInCents: line.lineTotalInCents,
+        })),
+      ),
+      subtotalInCents: cart.subtotalInCents,
+      shippingInCents: cart.shippingInCents,
+      totalInCents: cart.totalInCents,
+      contactEmail: values.email,
+      shippingName: values.name,
+      shippingCity: values.city,
+      shippingCountry: values.country,
+    });
+    clearCart(cartId);
+    return Astro.redirect(`/shop/order-confirmation/${order.id}`, 303);
+  }
+}
+
+// Redirect away from an empty cart on GET.
+if (Astro.request.method === 'GET' && cart.isEmpty) {
+  return Astro.redirect('/shop/cart', 303);
+}
+
+const countries = ['United States', 'United Kingdom', 'Germany', 'France', 'Canada', 'Australia'];
+const errorEntries = Object.entries(errors) as [keyof CheckoutValues, string][];
+
+const fieldClass =
+  'mt-1 w-full rounded border border-slate-400 px-3 py-2 dark:bg-slate-900';
+---
+
+<ShopLayout
+  title="Checkout"
+  description="Enter shipping and payment details to complete your demo order."
+  breadcrumbs={[
+    { label: 'Shop', href: '/shop' },
+    { label: 'Cart', href: '/shop/cart' },
+    { label: 'Checkout' },
+  ]}
+>
+  <h1 class="text-3xl font-bold">Checkout</h1>
+  <p class="mt-2 max-w-2xl text-slate-700 dark:text-slate-300">
+    This is a fake checkout. Do not enter real card details — no payment is processed and only a
+    non-sensitive order summary is stored.
+  </p>
+
+  {
+    errorEntries.length > 0 && (
+      <div
+        role="alert"
+        tabindex="-1"
+        id="error-summary"
+        class="mt-6 rounded-lg border border-red-600 bg-red-50 p-4 text-red-900 dark:bg-red-950 dark:text-red-100"
+      >
+        <h2 class="font-semibold">There is a problem</h2>
+        <ul class="mt-2 list-disc pl-6">
+          {errorEntries.map(([field, message]) => (
+            <li>
+              <a href={`#${field}`} class="underline underline-offset-4">
+                {message}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+    )
+  }
+
+  <div class="mt-8 grid gap-10 lg:grid-cols-[2fr_1fr]">
+    <form method="POST" novalidate class="space-y-8">
+      <fieldset class="space-y-6">
+        <legend class="text-xl font-semibold">Shipping details</legend>
+
+        <div>
+          <label for="name" class="block font-medium">Full name</label>
+          <input
+            id="name"
+            name="name"
+            type="text"
+            autocomplete="name"
+            required
+            value={values.name}
+            aria-invalid={errors.name ? 'true' : undefined}
+            aria-describedby={errors.name ? 'name-error' : undefined}
+            class={fieldClass}
+          />
+          {errors.name && <p id="name-error" class="mt-1 text-sm text-red-700 dark:text-red-300">{errors.name}</p>}
+        </div>
+
+        <div>
+          <label for="email" class="block font-medium">Email address</label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            autocomplete="email"
+            required
+            value={values.email}
+            aria-invalid={errors.email ? 'true' : undefined}
+            aria-describedby={errors.email ? 'email-error' : undefined}
+            class={fieldClass}
+          />
+          {errors.email && <p id="email-error" class="mt-1 text-sm text-red-700 dark:text-red-300">{errors.email}</p>}
+        </div>
+
+        <div>
+          <label for="address" class="block font-medium">Street address</label>
+          <input
+            id="address"
+            name="address"
+            type="text"
+            autocomplete="street-address"
+            required
+            value={values.address}
+            aria-invalid={errors.address ? 'true' : undefined}
+            aria-describedby={errors.address ? 'address-error' : undefined}
+            class={fieldClass}
+          />
+          {errors.address && <p id="address-error" class="mt-1 text-sm text-red-700 dark:text-red-300">{errors.address}</p>}
+        </div>
+
+        <div class="grid gap-6 sm:grid-cols-2">
+          <div>
+            <label for="city" class="block font-medium">City</label>
+            <input
+              id="city"
+              name="city"
+              type="text"
+              autocomplete="address-level2"
+              required
+              value={values.city}
+              aria-invalid={errors.city ? 'true' : undefined}
+              aria-describedby={errors.city ? 'city-error' : undefined}
+              class={fieldClass}
+            />
+            {errors.city && <p id="city-error" class="mt-1 text-sm text-red-700 dark:text-red-300">{errors.city}</p>}
+          </div>
+
+          <div>
+            <label for="postalCode" class="block font-medium">Postal code</label>
+            <input
+              id="postalCode"
+              name="postalCode"
+              type="text"
+              autocomplete="postal-code"
+              required
+              value={values.postalCode}
+              aria-invalid={errors.postalCode ? 'true' : undefined}
+              aria-describedby={errors.postalCode ? 'postalCode-error' : undefined}
+              class={fieldClass}
+            />
+            {errors.postalCode && <p id="postalCode-error" class="mt-1 text-sm text-red-700 dark:text-red-300">{errors.postalCode}</p>}
+          </div>
+        </div>
+
+        <div>
+          <label for="country" class="block font-medium">Country</label>
+          <select
+            id="country"
+            name="country"
+            autocomplete="country-name"
+            required
+            aria-invalid={errors.country ? 'true' : undefined}
+            aria-describedby={errors.country ? 'country-error' : undefined}
+            class={fieldClass}
+          >
+            <option value="">Please choose a country</option>
+            {countries.map((country) => (
+              <option value={country} selected={values.country === country}>
+                {country}
+              </option>
+            ))}
+          </select>
+          {errors.country && <p id="country-error" class="mt-1 text-sm text-red-700 dark:text-red-300">{errors.country}</p>}
+        </div>
+      </fieldset>
+
+      <fieldset class="space-y-6">
+        <legend class="text-xl font-semibold">Payment details</legend>
+        <p class="text-sm text-slate-600 dark:text-slate-400">
+          Test data only. Never enter a real card number.
+        </p>
+
+        <div>
+          <label for="cardName" class="block font-medium">Name on card</label>
+          <input
+            id="cardName"
+            name="cardName"
+            type="text"
+            autocomplete="cc-name"
+            required
+            value={values.cardName}
+            aria-invalid={errors.cardName ? 'true' : undefined}
+            aria-describedby={errors.cardName ? 'cardName-error' : undefined}
+            class={fieldClass}
+          />
+          {errors.cardName && <p id="cardName-error" class="mt-1 text-sm text-red-700 dark:text-red-300">{errors.cardName}</p>}
+        </div>
+
+        <div>
+          <label for="cardNumber" class="block font-medium">Card number</label>
+          <input
+            id="cardNumber"
+            name="cardNumber"
+            type="text"
+            inputmode="numeric"
+            autocomplete="cc-number"
+            required
+            value={values.cardNumber}
+            aria-invalid={errors.cardNumber ? 'true' : undefined}
+            aria-describedby={errors.cardNumber ? 'cardNumber-error' : 'cardNumber-hint'}
+            class={fieldClass}
+          />
+          <p id="cardNumber-hint" class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+            Use a fake number such as 4242 4242 4242 4242.
+          </p>
+          {errors.cardNumber && <p id="cardNumber-error" class="mt-1 text-sm text-red-700 dark:text-red-300">{errors.cardNumber}</p>}
+        </div>
+
+        <div class="grid gap-6 sm:grid-cols-2">
+          <div>
+            <label for="cardExpiry" class="block font-medium">Expiry date (MM/YY)</label>
+            <input
+              id="cardExpiry"
+              name="cardExpiry"
+              type="text"
+              inputmode="numeric"
+              autocomplete="cc-exp"
+              placeholder="MM/YY"
+              required
+              value={values.cardExpiry}
+              aria-invalid={errors.cardExpiry ? 'true' : undefined}
+              aria-describedby={errors.cardExpiry ? 'cardExpiry-error' : undefined}
+              class={fieldClass}
+            />
+            {errors.cardExpiry && <p id="cardExpiry-error" class="mt-1 text-sm text-red-700 dark:text-red-300">{errors.cardExpiry}</p>}
+          </div>
+
+          <div>
+            <label for="cardCvc" class="block font-medium">Security code (CVC)</label>
+            <input
+              id="cardCvc"
+              name="cardCvc"
+              type="text"
+              inputmode="numeric"
+              autocomplete="cc-csc"
+              required
+              value={values.cardCvc}
+              aria-invalid={errors.cardCvc ? 'true' : undefined}
+              aria-describedby={errors.cardCvc ? 'cardCvc-error' : undefined}
+              class={fieldClass}
+            />
+            {errors.cardCvc && <p id="cardCvc-error" class="mt-1 text-sm text-red-700 dark:text-red-300">{errors.cardCvc}</p>}
+          </div>
+        </div>
+      </fieldset>
+
+      <button
+        type="submit"
+        class="rounded bg-slate-900 px-6 py-3 font-semibold text-white hover:bg-slate-700 focus-visible:outline-2 focus-visible:outline-offset-2 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-300"
+      >
+        Place order — {formatPrice(cart.totalInCents)}
+      </button>
+    </form>
+
+    <aside aria-labelledby="summary-heading" class="h-fit rounded-lg border border-slate-200 p-5 dark:border-slate-800">
+      <h2 id="summary-heading" class="text-lg font-semibold">Order summary</h2>
+      <ul class="mt-4 space-y-3">
+        {cart.lines.map((line) => (
+          <li class="flex justify-between gap-4 text-sm">
+            <span>
+              <span aria-hidden="true">{line.product.emoji}</span> {line.product.name}
+              <span class="text-slate-600 dark:text-slate-400"> × {line.qty}</span>
+            </span>
+            <span class="font-medium">{formatPrice(line.lineTotalInCents)}</span>
+          </li>
+        ))}
+      </ul>
+      <dl class="mt-4 space-y-2 border-t border-slate-200 pt-4 dark:border-slate-800">
+        <div class="flex justify-between">
+          <dt>Subtotal</dt>
+          <dd>{formatPrice(cart.subtotalInCents)}</dd>
+        </div>
+        <div class="flex justify-between">
+          <dt>Shipping</dt>
+          <dd>{formatPrice(cart.shippingInCents)}</dd>
+        </div>
+        <div class="flex justify-between border-t border-slate-200 pt-2 text-lg font-bold dark:border-slate-800">
+          <dt>Total</dt>
+          <dd>{formatPrice(cart.totalInCents)}</dd>
+        </div>
+      </dl>
+    </aside>
+  </div>
+</ShopLayout>

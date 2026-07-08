@@ -1,11 +1,18 @@
 import { randomUUID } from 'node:crypto';
-import { and, count, desc, eq, gte, isNotNull } from 'drizzle-orm';
+import { and, count, desc, eq, gte, isNotNull, sql } from 'drizzle-orm';
 import { db } from './index';
 import {
   adminActions,
+  cartItems,
+  carts,
   events,
+  orders,
   pages,
+  type CartItemRow,
+  type CartRow,
   type EventRow,
+  type NewOrderRow,
+  type OrderRow,
   type PageRow,
 } from './schema';
 
@@ -18,6 +25,8 @@ export type EventType =
   | 'form_submit'
   | 'button_click'
   | 'link_click'
+  | 'cart_update'
+  | 'checkout_submit'
   | 'error';
 
 export interface RecordEventInput {
@@ -161,4 +170,96 @@ export function getDashboardStats(): DashboardStats {
     recentErrorCount,
     slowestResponses,
   };
+}
+
+// --- Demo shop: carts & orders ---------------------------------------------
+
+/** Fetch a cart by id, or create it with the given id if it does not exist. */
+export function getOrCreateCart(cartId: string): CartRow {
+  const existing = db.select().from(carts).where(eq(carts.id, cartId)).get();
+  if (existing) return existing;
+
+  const nowIso = new Date().toISOString();
+  return db
+    .insert(carts)
+    .values({ id: cartId, createdAt: nowIso, updatedAt: nowIso })
+    .returning()
+    .get();
+}
+
+/** All line items for a cart, oldest first. */
+export function getCartItems(cartId: string): CartItemRow[] {
+  return db
+    .select()
+    .from(cartItems)
+    .where(eq(cartItems.cartId, cartId))
+    .orderBy(cartItems.createdAt)
+    .all();
+}
+
+/** Add `qty` of a product to a cart, incrementing any existing line item. */
+export function addCartItem(cartId: string, productId: string, qty = 1): void {
+  const nowIso = new Date().toISOString();
+  getOrCreateCart(cartId);
+  db.insert(cartItems)
+    .values({
+      id: randomUUID(),
+      cartId,
+      productId,
+      qty,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    })
+    .onConflictDoUpdate({
+      target: [cartItems.cartId, cartItems.productId],
+      set: { qty: sql`${cartItems.qty} + ${qty}`, updatedAt: nowIso },
+    })
+    .run();
+  touchCart(cartId, nowIso);
+}
+
+/** Set an exact quantity for a line item; removes it when `qty <= 0`. */
+export function setCartItemQty(cartId: string, productId: string, qty: number): void {
+  if (qty <= 0) {
+    removeCartItem(cartId, productId);
+    return;
+  }
+  const nowIso = new Date().toISOString();
+  db.update(cartItems)
+    .set({ qty, updatedAt: nowIso })
+    .where(and(eq(cartItems.cartId, cartId), eq(cartItems.productId, productId)))
+    .run();
+  touchCart(cartId, nowIso);
+}
+
+/** Remove a single line item from a cart. */
+export function removeCartItem(cartId: string, productId: string): void {
+  db.delete(cartItems)
+    .where(and(eq(cartItems.cartId, cartId), eq(cartItems.productId, productId)))
+    .run();
+  touchCart(cartId, new Date().toISOString());
+}
+
+/** Remove all line items from a cart. */
+export function clearCart(cartId: string): void {
+  db.delete(cartItems).where(eq(cartItems.cartId, cartId)).run();
+  touchCart(cartId, new Date().toISOString());
+}
+
+function touchCart(cartId: string, nowIso: string): void {
+  db.update(carts).set({ updatedAt: nowIso }).where(eq(carts.id, cartId)).run();
+}
+
+/** Persist a completed order and return the stored row. */
+export function createOrder(input: Omit<NewOrderRow, 'id' | 'createdAt'>): OrderRow {
+  const nowIso = new Date().toISOString();
+  return db
+    .insert(orders)
+    .values({ ...input, id: randomUUID(), createdAt: nowIso })
+    .returning()
+    .get();
+}
+
+export function getOrderById(id: string): OrderRow | undefined {
+  return db.select().from(orders).where(eq(orders.id, id)).get();
 }
