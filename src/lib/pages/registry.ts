@@ -61,6 +61,13 @@ export const testPages: readonly TestPage[] = [
       'Exposes WebMCP tools (document.modelContext) for agents to fetch a challenge and earn a flag.',
   },
   {
+    id: 'webmcp-agent-intent',
+    title: 'WebMCP Agent Intent Test',
+    path: '/tests/agent-intent',
+    description:
+      'Asks connecting AI agents to declare their task intent via a WebMCP tool; records the response.',
+  },
+  {
     id: 'shop-plp',
     title: 'Demo Shop — Product List',
     path: '/shop',

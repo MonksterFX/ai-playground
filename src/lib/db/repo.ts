@@ -31,6 +31,7 @@ export type EventType =
   | 'webmcp_challenge'
   | 'webmcp_solve'
   | 'webmcp_flag_verify'
+  | 'webmcp_intent'
   | 'error';
 
 export interface RecordEventInput {
