@@ -27,6 +27,10 @@ export type EventType =
   | 'link_click'
   | 'cart_update'
   | 'checkout_submit'
+  | 'webmcp_tool_call'
+  | 'webmcp_challenge'
+  | 'webmcp_solve'
+  | 'webmcp_flag_verify'
   | 'error';
 
 export interface RecordEventInput {

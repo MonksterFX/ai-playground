@@ -1,0 +1,192 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+const flagResult = Astro.url.searchParams.get('flag');
+const flagBanner =
+  flagResult === 'valid'
+    ? { tone: 'success', message: 'Correct — that is a valid flag. Challenge complete.' }
+    : flagResult === 'invalid'
+      ? { tone: 'error', message: 'That flag is not valid. Solve the challenge to obtain a flag.' }
+      : flagResult === 'missing'
+        ? { tone: 'error', message: 'Enter a flag before submitting.' }
+        : null;
+---
+
+<BaseLayout
+  title="WebMCP Challenge Test"
+  description="A page that exposes WebMCP tools for agents: fetch a challenge, submit a solution, and earn a flag."
+>
+  <h1 class="text-2xl font-bold">WebMCP Challenge Test</h1>
+  <p class="mt-4 max-w-2xl text-slate-700 dark:text-slate-300">
+    This page exposes tools to AI agents using the emerging
+    <abbr title="Web Model Context Protocol">WebMCP</abbr> API
+    (<code>document.modelContext</code>). A connected agent can discover and call the tools
+    below to solve a challenge and receive a flag. You can then verify the flag against the
+    backend using the form at the bottom of the page.
+  </p>
+
+  <section aria-labelledby="tools-heading" class="mt-8">
+    <h2 id="tools-heading" class="text-lg font-semibold">Available tools</h2>
+    <dl class="mt-3 space-y-4">
+      <div>
+        <dt class="font-medium"><code>get-challenge</code></dt>
+        <dd class="text-slate-700 dark:text-slate-300">
+          Returns a fresh challenge prompt and a signed challenge token.
+        </dd>
+      </div>
+      <div>
+        <dt class="font-medium"><code>submit-solution</code></dt>
+        <dd class="text-slate-700 dark:text-slate-300">
+          Takes the challenge <code>token</code> and your <code>answer</code>. If the answer is
+          correct, it returns a flag of the form <code>FLAG&#123;…&#125;</code>.
+        </dd>
+      </div>
+    </dl>
+    <p class="mt-4 max-w-2xl text-sm text-slate-600 dark:text-slate-400">
+      Tool access is observed by an external tracking script that proxies the WebMCP object; the
+      tools themselves contain no tracking code.
+    </p>
+    <p id="webmcp-status" role="status" aria-live="polite" class="mt-2 text-sm font-medium"></p>
+  </section>
+
+  <section aria-labelledby="flag-check-heading" class="mt-10 max-w-md" id="flag-check">
+    <h2 id="flag-check-heading" class="text-lg font-semibold">Verify a flag</h2>
+    <p class="mt-2 text-slate-700 dark:text-slate-300">
+      Paste a flag returned by the <code>submit-solution</code> tool to check whether it is valid.
+    </p>
+
+    {
+      flagBanner && (
+        <div
+          role={flagBanner.tone === 'error' ? 'alert' : 'status'}
+          tabindex="-1"
+          class={`mt-4 rounded-lg border p-4 ${
+            flagBanner.tone === 'success'
+              ? 'border-green-600 bg-green-50 text-green-900 dark:bg-green-950 dark:text-green-100'
+              : 'border-red-600 bg-red-50 text-red-900 dark:bg-red-950 dark:text-red-100'
+          }`}
+        >
+          <p class="font-semibold">{flagBanner.message}</p>
+        </div>
+      )
+    }
+
+    <form method="POST" action="/api/webmcp/verify-flag" class="mt-4 space-y-4">
+      <div>
+        <label for="flag" class="block font-medium">Flag</label>
+        <input
+          id="flag"
+          name="flag"
+          type="text"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="FLAG{…}"
+          class="mt-1 w-full rounded border border-slate-400 px-3 py-2 font-mono dark:bg-slate-900"
+        />
+      </div>
+      <button
+        type="submit"
+        class="rounded bg-blue-700 px-4 py-2 font-medium text-white hover:bg-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2"
+      >
+        Verify flag
+      </button>
+    </form>
+  </section>
+</BaseLayout>
+
+<script>
+  import '@mcp-b/global';
+
+  const status = document.getElementById('webmcp-status');
+  const setStatus = (message: string) => {
+    if (status) status.textContent = message;
+  };
+
+  async function jsonPost(url: string, body: unknown): Promise<any> {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return response.json();
+  }
+
+  async function main() {
+    const ctx = document.modelContext;
+    if (!ctx || typeof ctx.registerTool !== 'function') {
+      setStatus('WebMCP is not available in this browser.');
+      return;
+    }
+
+    // Install the external tracking proxy BEFORE registering tools so every
+    // tool call is observed. Tracking lives entirely in this external module.
+    // The module is in /public, so it must be loaded via a script tag rather
+    // than imported from source (Vite's dev server blocks importing public
+    // files). It exposes `installWebmcpTracking` on `window`.
+    try {
+      const w = window as typeof window & { installWebmcpTracking?: () => boolean };
+      await new Promise<void>((resolve, reject) => {
+        if (w.installWebmcpTracking) return resolve();
+        const script = document.createElement('script');
+        script.type = 'module';
+        script.src = '/webmcp-tracker.js';
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('Failed to load tracker'));
+        document.head.appendChild(script);
+      });
+      w.installWebmcpTracking?.();
+    } catch {
+      // Tracking is best-effort; continue registering tools regardless.
+    }
+
+    document.modelContext.registerTool({
+      name: 'get-challenge',
+      description:
+        'Get a new challenge to solve. Returns a human-readable prompt and a signed challenge token to pass back to submit-solution.',
+      inputSchema: { type: 'object', properties: {} },
+      async execute() {
+        const data = await jsonPost('/api/webmcp/challenge', {});
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Challenge (${data.title}): ${data.prompt}\nToken: ${data.token}`,
+            },
+          ],
+        };
+      },
+    });
+
+    document.modelContext.registerTool({
+      name: 'submit-solution',
+      description:
+        'Submit an answer for a challenge. Provide the token from get-challenge and your answer. Returns a flag if correct.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          token: { type: 'string', description: 'The token returned by get-challenge.' },
+          answer: { type: 'string', description: 'Your answer to the challenge prompt.' },
+        },
+        required: ['token', 'answer'],
+      },
+      async execute(args: { token?: string; answer?: string }) {
+        const data = await jsonPost('/api/webmcp/solve', {
+          token: args?.token ?? '',
+          answer: args?.answer ?? '',
+        });
+        if (data.correct) {
+          return { content: [{ type: 'text', text: `Correct! Your flag is: ${data.flag}` }] };
+        }
+        const reason =
+          data.reason === 'invalid_token'
+            ? 'The challenge token is missing, invalid, or expired. Request a new challenge.'
+            : 'That answer is incorrect. Try again.';
+        return { content: [{ type: 'text', text: reason }], isError: true };
+      },
+    });
+
+    setStatus('WebMCP tools ready: get-challenge, submit-solution.');
+  }
+
+  void main();
+</script>

@@ -54,6 +54,13 @@ export const testPages: readonly TestPage[] = [
     description: 'Demonstrates disabled-page behavior; disable it from the admin area.',
   },
   {
+    id: 'webmcp-challenge',
+    title: 'WebMCP Challenge Test',
+    path: '/tests/webmcp',
+    description:
+      'Exposes WebMCP tools (document.modelContext) for agents to fetch a challenge and earn a flag.',
+  },
+  {
     id: 'shop-plp',
     title: 'Demo Shop — Product List',
     path: '/shop',
