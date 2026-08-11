@@ -12,8 +12,10 @@
     "astro": "astro",
     "check": "astro check",
     "lint": "eslint .",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
+    "db:generate:observability": "drizzle-kit generate --config=drizzle.config.observability.ts",
+    "db:generate:shop": "drizzle-kit generate --config=drizzle.config.shop.ts",
+    "db:migrate:observability": "drizzle-kit migrate --config=drizzle.config.observability.ts",
+    "db:migrate:shop": "drizzle-kit migrate --config=drizzle.config.shop.ts",
     "a11y": "pa11y-ci",
     "lighthouse": "lighthouse http://localhost:4321/ --only-categories=accessibility --quiet --chrome-flags=\"--headless\""
   },
@@ -24,10 +26,11 @@
     "astro": "^7.0.4",
     "better-sqlite3": "^12.11.1",
     "drizzle-orm": "^0.45.2",
-    "tailwindcss": "^4.3.2"
+    "tailwindcss": "^4.3.2",
+    "typescript": "^6.0.3"
   },
   "devDependencies": {
-    "@astrojs/check": "^0.9.9",
+    "@astrojs/check": "^0.9.10",
     "@axe-core/cli": "^4.12.1",
     "@axe-core/playwright": "^4.12.1",
     "@types/better-sqlite3": "^7.6.13",

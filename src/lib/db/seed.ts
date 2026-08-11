@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
-import { db } from './index';
-import { pages } from './schema';
+import { observabilityDb } from './index';
+import { pages } from './schema/observability';
 import { testPages } from '../pages/registry';
 
 let seeded = false;
@@ -20,7 +20,7 @@ export function ensurePagesSeeded(): void {
 
   const nowIso = new Date().toISOString();
 
-  const upsert = db
+  const upsert = observabilityDb
     .insert(pages)
     .values(
       testPages.map((page) => ({

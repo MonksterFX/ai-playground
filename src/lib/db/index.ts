@@ -4,20 +4,28 @@ import { dirname, resolve } from 'node:path';
 import Database from 'better-sqlite3';
 import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
-import * as schema from './schema';
+import * as observabilitySchema from './schema/observability';
+import * as shopSchema from './schema/shop';
 
-export type DB = BetterSQLite3Database<typeof schema>;
+export type ObservabilityDB = BetterSQLite3Database<typeof observabilitySchema>;
+export type ShopDB = BetterSQLite3Database<typeof shopSchema>;
 
-const DEFAULT_DB_PATH = './data/playground.db';
-const MIGRATIONS_FOLDER = resolve(process.cwd(), 'drizzle');
+const OBSERVABILITY_MIGRATIONS = resolve(process.cwd(), 'drizzle/observability');
+const SHOP_MIGRATIONS = resolve(process.cwd(), 'drizzle/shop');
 
-// Reuse a single connection across HMR reloads and requests.
-const globalForDb = globalThis as unknown as {
-  __agentPlaygroundDb?: DB;
+// Reuse connections across HMR reloads.
+const g = globalThis as unknown as {
+  __observabilityDb?: ObservabilityDB;
+  __shopDb?: ShopDB;
 };
 
-function createDb(): DB {
-  const dbPath = resolve(process.cwd(), process.env.DATABASE_PATH ?? DEFAULT_DB_PATH);
+function openDb<S extends Record<string, unknown>>(
+  envVar: string,
+  defaultPath: string,
+  schema: S,
+  migrationsFolder: string,
+): BetterSQLite3Database<S> {
+  const dbPath = resolve(process.cwd(), process.env[envVar] ?? defaultPath);
 
   const dir = dirname(dbPath);
   if (!existsSync(dir)) {
@@ -30,17 +38,22 @@ function createDb(): DB {
 
   const db = drizzle(sqlite, { schema });
 
-  if (existsSync(MIGRATIONS_FOLDER)) {
-    migrate(db, { migrationsFolder: MIGRATIONS_FOLDER });
+  if (existsSync(migrationsFolder)) {
+    migrate(db, { migrationsFolder });
   }
 
   return db;
 }
 
-export const db: DB = globalForDb.__agentPlaygroundDb ?? createDb();
+export const observabilityDb: ObservabilityDB =
+  g.__observabilityDb ??
+  openDb('OBSERVABILITY_DB_PATH', './data/observability.db', observabilitySchema, OBSERVABILITY_MIGRATIONS);
 
-if (!globalForDb.__agentPlaygroundDb) {
-  globalForDb.__agentPlaygroundDb = db;
-}
+export const shopDb: ShopDB =
+  g.__shopDb ??
+  openDb('SHOP_DB_PATH', './data/shop.db', shopSchema, SHOP_MIGRATIONS);
 
-export { schema };
+if (!g.__observabilityDb) g.__observabilityDb = observabilityDb;
+if (!g.__shopDb) g.__shopDb = shopDb;
+
+export { observabilitySchema, shopSchema };

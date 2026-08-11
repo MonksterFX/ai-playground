@@ -1,20 +1,23 @@
 import { randomUUID } from 'node:crypto';
 import { and, count, desc, eq, gte, isNotNull, sql } from 'drizzle-orm';
-import { db } from './index';
+import { observabilityDb, shopDb } from './index';
 import {
   adminActions,
+  events,
+  pages,
+  type AdminActionRow,
+  type EventRow,
+  type PageRow,
+} from './schema/observability';
+import {
   cartItems,
   carts,
-  events,
   orders,
-  pages,
   type CartItemRow,
   type CartRow,
-  type EventRow,
   type NewOrderRow,
   type OrderRow,
-  type PageRow,
-} from './schema';
+} from './schema/shop';
 
 export type EventType =
   | 'page_view'
@@ -55,7 +58,7 @@ export interface RecordEventInput {
 /** Insert a tracking event. Never throws to the caller's critical path. */
 export function recordEvent(input: RecordEventInput): void {
   const nowIso = new Date().toISOString();
-  db.insert(events)
+  observabilityDb.insert(events)
     .values({
       id: randomUUID(),
       timestamp: nowIso,
@@ -87,7 +90,7 @@ export interface RecordAdminActionInput {
 
 export function recordAdminAction(input: RecordAdminActionInput): void {
   const nowIso = new Date().toISOString();
-  db.insert(adminActions)
+  observabilityDb.insert(adminActions)
     .values({
       id: randomUUID(),
       timestamp: nowIso,
@@ -101,20 +104,20 @@ export function recordAdminAction(input: RecordAdminActionInput): void {
 
 /** All registered pages, ordered by title. */
 export function listPages(): PageRow[] {
-  return db.select().from(pages).orderBy(pages.title).all();
+  return observabilityDb.select().from(pages).orderBy(pages.title).all();
 }
 
 export function getPageByPath(path: string): PageRow | undefined {
-  return db.select().from(pages).where(eq(pages.path, path)).get();
+  return observabilityDb.select().from(pages).where(eq(pages.path, path)).get();
 }
 
 export function getPageById(id: string): PageRow | undefined {
-  return db.select().from(pages).where(eq(pages.id, id)).get();
+  return observabilityDb.select().from(pages).where(eq(pages.id, id)).get();
 }
 
 /** Toggle a page's enabled state. Returns the updated row (or undefined). */
 export function setPageEnabled(id: string, enabled: boolean): PageRow | undefined {
-  return db
+  return observabilityDb
     .update(pages)
     .set({ enabled, updatedAt: new Date().toISOString() })
     .where(eq(pages.id, id))
@@ -124,11 +127,11 @@ export function setPageEnabled(id: string, enabled: boolean): PageRow | undefine
 
 /** Recent events, newest first. */
 export function listRecentEvents(limit = 200): EventRow[] {
-  return db.select().from(events).orderBy(desc(events.timestamp)).limit(limit).all();
+  return observabilityDb.select().from(events).orderBy(desc(events.timestamp)).limit(limit).all();
 }
 
 export function getEventById(id: string): EventRow | undefined {
-  return db.select().from(events).where(eq(events.id, id)).get();
+  return observabilityDb.select().from(events).where(eq(events.id, id)).get();
 }
 
 export interface DashboardStats {
@@ -144,22 +147,22 @@ export interface DashboardStats {
 export function getDashboardStats(): DashboardStats {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-  const totalPages = db.select({ value: count() }).from(pages).get()?.value ?? 0;
+  const totalPages = observabilityDb.select({ value: count() }).from(pages).get()?.value ?? 0;
   const enabledPages =
-    db.select({ value: count() }).from(pages).where(eq(pages.enabled, true)).get()?.value ?? 0;
+    observabilityDb.select({ value: count() }).from(pages).where(eq(pages.enabled, true)).get()?.value ?? 0;
 
   const recentEventCount =
-    db.select({ value: count() }).from(events).where(gte(events.timestamp, since)).get()?.value ??
+    observabilityDb.select({ value: count() }).from(events).where(gte(events.timestamp, since)).get()?.value ??
     0;
 
   const recentErrorCount =
-    db
+    observabilityDb
       .select({ value: count() })
       .from(events)
       .where(and(eq(events.eventType, 'error'), gte(events.timestamp, since)))
       .get()?.value ?? 0;
 
-  const slowestResponses = db
+  const slowestResponses = observabilityDb
     .select()
     .from(events)
     .where(and(gte(events.timestamp, since), isNotNull(events.responseTimeMs)))
@@ -181,11 +184,11 @@ export function getDashboardStats(): DashboardStats {
 
 /** Fetch a cart by id, or create it with the given id if it does not exist. */
 export function getOrCreateCart(cartId: string): CartRow {
-  const existing = db.select().from(carts).where(eq(carts.id, cartId)).get();
+  const existing = shopDb.select().from(carts).where(eq(carts.id, cartId)).get();
   if (existing) return existing;
 
   const nowIso = new Date().toISOString();
-  return db
+  return shopDb
     .insert(carts)
     .values({ id: cartId, createdAt: nowIso, updatedAt: nowIso })
     .returning()
@@ -194,7 +197,7 @@ export function getOrCreateCart(cartId: string): CartRow {
 
 /** All line items for a cart, oldest first. */
 export function getCartItems(cartId: string): CartItemRow[] {
-  return db
+  return shopDb
     .select()
     .from(cartItems)
     .where(eq(cartItems.cartId, cartId))
@@ -206,7 +209,7 @@ export function getCartItems(cartId: string): CartItemRow[] {
 export function addCartItem(cartId: string, productId: string, qty = 1): void {
   const nowIso = new Date().toISOString();
   getOrCreateCart(cartId);
-  db.insert(cartItems)
+  shopDb.insert(cartItems)
     .values({
       id: randomUUID(),
       cartId,
@@ -230,7 +233,7 @@ export function setCartItemQty(cartId: string, productId: string, qty: number): 
     return;
   }
   const nowIso = new Date().toISOString();
-  db.update(cartItems)
+  shopDb.update(cartItems)
     .set({ qty, updatedAt: nowIso })
     .where(and(eq(cartItems.cartId, cartId), eq(cartItems.productId, productId)))
     .run();
@@ -239,7 +242,7 @@ export function setCartItemQty(cartId: string, productId: string, qty: number): 
 
 /** Remove a single line item from a cart. */
 export function removeCartItem(cartId: string, productId: string): void {
-  db.delete(cartItems)
+  shopDb.delete(cartItems)
     .where(and(eq(cartItems.cartId, cartId), eq(cartItems.productId, productId)))
     .run();
   touchCart(cartId, new Date().toISOString());
@@ -247,18 +250,18 @@ export function removeCartItem(cartId: string, productId: string): void {
 
 /** Remove all line items from a cart. */
 export function clearCart(cartId: string): void {
-  db.delete(cartItems).where(eq(cartItems.cartId, cartId)).run();
+  shopDb.delete(cartItems).where(eq(cartItems.cartId, cartId)).run();
   touchCart(cartId, new Date().toISOString());
 }
 
 function touchCart(cartId: string, nowIso: string): void {
-  db.update(carts).set({ updatedAt: nowIso }).where(eq(carts.id, cartId)).run();
+  shopDb.update(carts).set({ updatedAt: nowIso }).where(eq(carts.id, cartId)).run();
 }
 
 /** Persist a completed order and return the stored row. */
 export function createOrder(input: Omit<NewOrderRow, 'id' | 'createdAt'>): OrderRow {
   const nowIso = new Date().toISOString();
-  return db
+  return shopDb
     .insert(orders)
     .values({ ...input, id: randomUUID(), createdAt: nowIso })
     .returning()
@@ -266,5 +269,5 @@ export function createOrder(input: Omit<NewOrderRow, 'id' | 'createdAt'>): Order
 }
 
 export function getOrderById(id: string): OrderRow | undefined {
-  return db.select().from(orders).where(eq(orders.id, id)).get();
+  return shopDb.select().from(orders).where(eq(orders.id, id)).get();
 }
