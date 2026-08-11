@@ -23,7 +23,7 @@ const year = new Date().getFullYear();
     <title>{title} — Agent Playground</title>
   </head>
   <body
-    class="min-h-screen bg-white text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100"
+    class="flex min-h-screen flex-col bg-white text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100"
   >
     <a class="skip-link" href="#main-content">Skip to main content</a>
 
@@ -49,7 +49,7 @@ const year = new Date().getFullYear();
       </div>
     </header>
 
-    <main id="main-content" class="mx-auto max-w-4xl px-4 py-8">
+    <main id="main-content" class="mx-auto w-full max-w-4xl grow px-4 py-8">
       <slot />
     </main>
 

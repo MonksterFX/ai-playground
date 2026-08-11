@@ -54,7 +54,7 @@ A fully accessible fake shop at `/shop/` with product listing, product detail, c
 
 ```sh
 npm install
-cp .env.example .env   # set ADMIN_USER, ADMIN_PASS, WEBMCP_SECRET
+cp .env.example .env   # set ADMIN_USERNAME, ADMIN_PASSWORD, WEBMCP_SECRET
 npm run dev
 ```
 
@@ -64,10 +64,12 @@ Open [localhost:4321](http://localhost:4321).
 
 | Variable | Required | Description |
 | :--- | :---: | :--- |
-| `ADMIN_USER` | ✓ | HTTP Basic Auth username for `/admin/` |
-| `ADMIN_PASS` | ✓ | HTTP Basic Auth password for `/admin/` |
+| `ADMIN_USERNAME` | ✓ | HTTP Basic Auth username for `/admin/` |
+| `ADMIN_PASSWORD` | ✓ | HTTP Basic Auth password for `/admin/` |
 | `WEBMCP_SECRET` | ✓ | HMAC key for signing challenge tokens |
 | `TRACK_IP` | | Set to `true` to store requester IP in the event log |
+| `INVITE_GATE_ENABLED` | | Set to `true` to require an invite code for site access |
+| `INVITE_CODES` | | Comma-separated invite codes (used when invite gate is enabled) |
 
 ## Commands
 

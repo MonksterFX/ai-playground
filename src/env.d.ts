@@ -6,6 +6,8 @@ declare namespace App {
     requestId: string;
     /** Whether the request passed admin Basic Auth. */
     isAdmin: boolean;
+    /** Whether the request passed the site invite-code gate. */
+    hasInviteAccess: boolean;
     /** Demo-shop cart id (from the `cart_id` cookie); set on `/shop*` routes. */
     cartId: string | null;
   }

@@ -5,6 +5,13 @@ import { defineMiddleware } from 'astro:middleware';
 import { unauthorizedResponse, verifyAdminAuth } from './lib/auth';
 import { getPageByPath, recordEvent } from './lib/db/repo';
 import { ensurePagesSeeded } from './lib/db/seed';
+import {
+  getInviteCookieName,
+  isInviteGateEnabled,
+  isInviteGateMisconfigured,
+  isInvitePublicPath,
+  isValidInviteCode,
+} from './lib/invite';
 import { resolveTrackedPage } from './lib/pages/registry';
 import { detectAgentHint } from './lib/tracking/agent';
 import { filterHeaders } from './lib/tracking/headers';
@@ -66,6 +73,29 @@ export const onRequest = defineMiddleware(async (context, next) => {
   context.locals.requestId = requestId;
   context.locals.isAdmin = false;
   context.locals.cartId = null;
+  context.locals.hasInviteAccess = false;
+
+  // --- Site invite-code gate ---
+  if (isInviteGateEnabled()) {
+    if (isInviteGateMisconfigured()) {
+      return new Response(
+        'Invite gate is enabled but no INVITE_CODES are configured. Set INVITE_CODES or disable INVITE_GATE_ENABLED.',
+        { status: 500, headers: { 'Content-Type': 'text/plain; charset=utf-8' } },
+      );
+    }
+
+    if (!isInvitePublicPath(url.pathname)) {
+      const inviteCookie = context.cookies.get(getInviteCookieName())?.value ?? null;
+      if (!isValidInviteCode(inviteCookie)) {
+        const inviteUrl = new URL('/invite', url);
+        inviteUrl.searchParams.set('next', `${url.pathname}${url.search}`);
+        return Response.redirect(inviteUrl, 303);
+      }
+      context.locals.hasInviteAccess = true;
+    }
+  } else {
+    context.locals.hasInviteAccess = true;
+  }
 
   // --- Demo-shop cart cookie provisioning ---
   if (url.pathname === '/shop' || url.pathname.startsWith('/shop/')) {
